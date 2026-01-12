@@ -1,127 +1,282 @@
-User & Notification Services
-
-Учебный проект с двумя микросервисами:
-
-1. user-service – управление пользователями (CRUD, PostgreSQL, Kafka producer)
-2. notification-service – отправка уведомлений на почту (Kafka consumer, Email)
-
-Проект использует: Java 17+, Spring Boot, PostgreSQL, Kafka, Docker, Docker Compose.
+Инструкция по запуску проекта Microservices
 
 Структура проекта:
+- user-service — микросервис для управления пользователями
+- notification-service — микросервис для уведомлений
+- gateway-service — API Gateway с маршрутизацией и circuit breaker
+- eureka-server — сервис регистрации и discovery
+- config-server — централизованный сервер конфигурации
+- config-repo — локальный git-репозиторий с конфигурациями для сервисов
 
-project-root/
-├── docker-compose.yml        # запуск всех сервисов и зависимостей
+Конфигурации:
+- User Service: application.yml берётся из config-server (user-service.yml)
+- Notification Service: application.yml берётся из config-server (notification-service.yml)
+- Gateway Service: application.yml берётся из config-server (gateway-service.yml)
+- Config Server: читает конфигурации из локального каталога /config-repo
+- Eureka Server: порт 8761
+
+microservices-project/
+├── config-server/
+│   ├── src/main/java/com/example/configserver/ConfigServerApplication.java
+│   ├── src/main/resources/application.yml
+│   └── pom.xml
+├── eureka-server/
+│   ├── src/main/java/com/example/eurekaserver/EurekaServerApplication.java
+│   ├── src/main/resources/application.yml
+│   └── pom.xml
 ├── user-service/
-│   ├── pom.xml
-│   └── src/
-└── notification-service/
-├── pom.xml
-└── src/
+│   ├── src/main/java/com/example/userservice/...
+│   ├── src/main/resources/application.yml
+│   ├── Dockerfile
+│   └── pom.xml
+├── notification-service/
+│   ├── src/main/java/com/example/notificationservice/...
+│   ├── src/main/resources/application.yml
+│   ├── Dockerfile
+│   └── pom.xml
+├── gateway-service/
+│   ├── src/main/java/com/example/gatewayservice/...
+│   ├── src/main/resources/application.yml
+│   ├── Dockerfile
+│   └── pom.xml
+├── config-repo/
+│   ├── application.yml
+│   ├── user-service.yml
+│   ├── notification-service.yml
+│   └── gateway-service.yml
+└── docker-compose.yml
 
-Требования:
+---
 
-- JDK 17+ (подходит и для Java 25)
-- Maven 3.9+
-- Docker и Docker Compose
-- Почтовый аккаунт для отправки писем (SMTP)
+Шаг 0: Подготовка config-repo
 
-Подготовка Docker:
+Создать папку config-repo в корне проекта и добавить файлы:
 
-Все сервисы и зависимости можно запускать через Docker Compose:
+1. application.yml (общие настройки для всех сервисов):
 
-docker-compose up --build
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
 
-Сервисы будут доступны на портах:
+2. user-service.yml:
 
-- PostgreSQL: localhost:5432
-- Kafka: localhost:9092
-- user-service: http://localhost:8080
-- notification-service: http://localhost:8081
+server:
+  port: 8080
 
-Сборка jar файлов:
+spring:
+  datasource:
+    url: jdbc:h2:mem:userDb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
 
-Перед запуском контейнеров убедитесь, что собраны jar-файлы:
+3. notification-service.yml:
 
-# Сборка user-service
-cd user-service
-mvn clean package
+server:
+  port: 8082
 
-# Сборка notification-service
-cd ../notification-service
-mvn clean package
+spring:
+  datasource:
+    url: jdbc:h2:mem:notificationDb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
 
-Docker контейнеры используют эти jar-файлы.
+4. gateway-service.yml:
 
-Конфигурация сервисов:
+server:
+  port: 8081
 
-user-service:
+spring:
+  datasource:
+    url: jdbc:h2:mem:gatewayDb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
 
-Переменные окружения (docker-compose.yml):
+---
 
-SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/usersdb
-SPRING_DATASOURCE_USERNAME=user
-SPRING_DATASOURCE_PASSWORD=password
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+Шаг 1: Docker Compose
 
-notification-service:
+version: "3.9"
 
-Переменные окружения:
+services:
 
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-SPRING_MAIL_HOST=smtp.example.com
-SPRING_MAIL_PORT=587
-SPRING_MAIL_USERNAME=your_email@example.com
-SPRING_MAIL_PASSWORD=your_email_password
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_DB: users_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
 
-> Настройте реальные данные SMTP для отправки писем.
+  zookeeper:
+    image: wurstmeister/zookeeper:3.4.6
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - microservices-network
 
-Запуск проекта:
+  kafka:
+    image: wurstmeister/kafka:2.13-2.8.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - microservices-network
 
-1. Собрать jar-файлы (см. выше)
-2. В корне проекта запустить Docker Compose:
+  eureka-server:
+    container_name: eureka-server
+    build:
+      context: ./eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - microservices-network
 
-docker-compose up --build
+  config-server:
+    container_name: config-server
+    build:
+      context: ./config-server
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./config-repo:/config-repo
+    depends_on:
+      - eureka-server
+    networks:
+      - microservices-network
 
-3. Проверьте логи сервисов:
+  user-service:
+    container_name: user-service
+    build:
+      context: ./user-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - kafka
+      - eureka-server
+      - config-server
+    networks:
+      - microservices-network
 
-docker-compose logs -f user-service
-docker-compose logs -f notification-service
+  notification-service:
+    container_name: notification-service
+    build:
+      context: ./notification-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - kafka
+      - eureka-server
+      - config-server
+    networks:
+      - microservices-network
 
-4. После запуска сервисов можно:
-    - Создавать/удалять пользователей через user-service REST API
-    - Получать уведомления по почте через notification-service
+  api-gateway:
+    container_name: api-gateway
+    build:
+      context: ./gateway-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - eureka-server
+      - config-server
+    networks:
+      - microservices-network
 
-Тестирование:
+networks:
+  microservices-network:
+    driver: bridge
 
-- Unit tests – Maven + Mockito
-- Integration tests – Testcontainers (PostgreSQL, Kafka)
+volumes:
+  postgres-data:
 
-Запуск тестов:
+---
 
-cd user-service
-mvn test
+ПОРЯДОК ЗАПУСКА
 
-cd ../notification-service
-mvn test
+1. Запустить Eureka Server:
+   cd eureka-server
+   mvn clean spring-boot:run
+   Порт: 8761
+   URL: http://localhost:8761
 
-REST API (user-service):
+2. Запустить Config Server:
+   cd config-server
+   mvn clean spring-boot:run
+   Порт: 8888
+   Проверка: http://localhost:8888/user-service/default
 
-Пример одного endpoint:
+3. Запустить User Service:
+   cd user-service
+   mvn clean spring-boot:run
+   Порт: 8080
+   Проверка:
+    - GET http://localhost:8080/users
+    - POST http://localhost:8080/users
 
-- POST /users – создать пользователя
-- DELETE /users/{id} – удалить пользователя (генерирует Kafka event)
+4. Запустить Notification Service:
+   cd notification-service
+   mvn clean spring-boot:run
+   Порт: 8082
+   Проверка:
+    - GET http://localhost:8082/notifications
+    - POST http://localhost:8082/notifications
 
-> DTO используется для передачи данных, entity напрямую не возвращается.
+5. Запустить API Gateway:
+   cd gateway-service
+   mvn clean spring-boot:run
+   Порт: 8081
+   Проверка маршрутов:
+    - GET http://localhost:8081/users → user-service
+    - GET http://localhost:8081/notifications → notification-service
+      Тестирование fallback:
+    - Остановите любой сервис
+    - Gateway должен вернуть сообщение "Сервис временно недоступен. Попробуйте позже."
 
-Почтовые уведомления:
+6. Проверка работы:
+    - Откройте Eureka Server: http://localhost:8761 — убедитесь, что сервисы зарегистрированы
+    - Используйте Postman или curl для тестирования маршрутов через gateway
+    - Остановите сервисы по очереди и проверьте fallback
 
-- При создании пользователя: "Здравствуйте! Ваш аккаунт на сайте успешно создан."
-- При удалении пользователя: "Здравствуйте! Ваш аккаунт был удалён."
+Полезные команды Maven:
+- Сборка проекта: mvn clean install
+- Форсированный апдейт зависимостей: mvn clean install -U
+- Запуск конкретного модуля: mvn spring-boot:run -pl user-service
 
-Уведомления приходят на email, указанный в пользователе.
-
-Советы по отладке:
-
-- Проверяйте логи контейнеров: docker-compose logs -f
-- Kafka топики: user-events (по умолчанию)
-- PostgreSQL: usersdb, пользователь user, пароль password
+Конец инструкции.

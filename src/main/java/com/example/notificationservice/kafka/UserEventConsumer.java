@@ -1,7 +1,7 @@
-package org.example.notificationservice.kafka;
+package com.example.notificationservice.kafka;
 
-import org.example.notificationservice.dto.UserEventDto;
-import org.example.notificationservice.service.EmailService;
+import com.example.notificationservice.dto.UserEventDto;
+import com.example.notificationservice.service.EmailService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +18,7 @@ public class UserEventConsumer {
     public void listen(UserEventDto event) {
         String subject = "Account Notification";
         String text = switch (event.getOperation()) {
-            case "CREATE" -> "Здравствуйте! Ваш аккаунт на сайте был успешно создан.";
+            case "CREATE" -> "Здравствуйте! Ваш аккаунт был успешно создан.";
             case "DELETE" -> "Здравствуйте! Ваш аккаунт был удалён.";
             default -> "Операция с аккаунтом выполнена.";
         };

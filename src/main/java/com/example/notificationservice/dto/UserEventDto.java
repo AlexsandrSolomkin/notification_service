@@ -1,4 +1,4 @@
-package org.example.notificationservice.dto;
+package com.example.notificationservice.dto;
 
 public class UserEventDto {
     private String operation;
@@ -10,7 +10,6 @@ public class UserEventDto {
         this.email = email;
     }
 
-    // Getters и Setters
     public String getOperation() { return operation; }
     public void setOperation(String operation) { this.operation = operation; }
     public String getEmail() { return email; }

@@ -1,12 +1,26 @@
 spring:
+  application:
+    name: notification-service
+
+  cloud:
+    config:
+      uri: http://config-server:8888
+    eureka:
+      client:
+        service-url:
+          defaultZone: http://eureka-server:8761/eureka
+        register-with-eureka: true
+        fetch-registry: true
+
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:9092
     consumer:
       group-id: notification-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+
   mail:
     host: smtp.example.com
     port: 587
@@ -15,3 +29,6 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+
+server:
+  port: 8082
